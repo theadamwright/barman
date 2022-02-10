@@ -5,7 +5,7 @@ on:
   pull_request:
     branches: [ master ]
   push:
-    branches: [ master ]
+    branches: [ master, 'test_py35_ci']
 
 jobs:
   linter:
@@ -64,7 +64,7 @@ jobs:
           then
             python -m tox
           else
-            python -m tox -e ${{ matrix.tox-env }}
+            python -m tox -re ${{ matrix.tox-env }}
           fi
 
 
