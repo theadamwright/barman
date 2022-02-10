@@ -60,9 +60,10 @@ jobs:
 
       - name: Step 5 - Run tox targets for ${{ matrix.python-version }} ${{matrix.tox-env}}
         run: |
+          tox --version
           if [[ -z "${{ matrix.tox-env }}" ]]
           then
-            python -m tox
+            python -m tox -r
           else
             python -m tox -re ${{ matrix.tox-env }}
           fi
