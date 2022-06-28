@@ -77,7 +77,11 @@ from barman.lockfile import (
     ServerWalSyncLock,
     ServerXLOGDBLock,
 )
-from barman.postgres import PostgreSQLConnection, StreamingConnection
+from barman.postgres import (
+    PostgreSQLConnection,
+    StandbyPostgreSQLConnection,
+    StreamingConnection,
+)
 from barman.process import ProcessManager
 from barman.remote_status import RemoteStatusMixin
 from barman.retention_policies import RetentionPolicyFactory, RetentionPolicy
@@ -265,9 +269,20 @@ class Server(RemoteStatusMixin):
                     raise ConninfoException(
                         "Missing 'conninfo' parameter for server '%s'" % config.name
                     )
-                self.postgres = PostgreSQLConnection(
-                    config.conninfo, config.immediate_checkpoint, config.slot_name
-                )
+                # If primary_conninfo is set then we're connecting to a standby
+                if config.primary_conninfo is not None:
+                    self.postgres = StandbyPostgreSQLConnection(
+                        config.conninfo,
+                        config.immediate_checkpoint,
+                        config.slot_name,
+                        # The standby needs a reference to the primary so that it can
+                        # perform WAL switches itself when calling pg_backup_stop.
+                        primary_conninfo=config.primary_conninfo,
+                    )
+                else:
+                    self.postgres = PostgreSQLConnection(
+                        config.conninfo, config.immediate_checkpoint, config.slot_name
+                    )
             # If the PostgreSQLConnection creation fails, disable the Server
             except ConninfoException as e:
                 self.config.disabled = True
