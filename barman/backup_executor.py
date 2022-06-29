@@ -584,6 +584,7 @@ class PostgresBackupExecutor(BackupExecutor):
             retry_sleep=self.config.basebackup_retry_sleep,
             retry_handler=partial(self._retry_handler, dest_dirs),
             compression=self.backup_compression,
+            err_handler=self._make_err_handler(),
         )
 
         # Do the actual copy
@@ -647,6 +648,34 @@ class PostgresBackupExecutor(BackupExecutor):
         )
         # Remove all the destination directories and reinit the backup
         self._prepare_backup_destination(dest_dirs)
+
+    def _make_err_handler(self):
+        """
+        Handler invoked during a backup when anything is sent to stderr.
+
+        Used to perform a WAL switch on a primary server if pg_basebackup
+        is running against a standby, otherwise just logs output at INFO
+        level.
+        """
+
+        def err_handler(line):
+            # Always log the line, since this handler will have overridden the
+            # default command err_handler.
+            # Although this is used as a stderr handler, the pg_basebackup lines
+            # logged here are more appropriate at INFO level since they are just
+            # describing regular behaviour.
+            _logger.log(logging.INFO, "%s", line)
+            # TODO: Does this line change across pg_basebackup versions 10 to 15?
+            if (
+                self.server.config.primary_conninfo is not None
+                and "waiting for required WAL segments to be archived" in line
+            ):
+                # If pg_basebackup is waiting for WAL segments and primary_conninfo
+                # is configured then we are backing up a standby and must manually
+                # perform a WAL switch.
+                self.server.postgres.switch_wal()
+
+        return err_handler
 
     def _prepare_backup_destination(self, dest_dirs):
         """
